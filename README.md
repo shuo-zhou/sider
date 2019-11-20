@@ -1,5 +1,9 @@
 Repository for reproducing experiments in AAAI-20 paper "Side Information Dependence as a Regularizer for Analyzing Human Brain Conditions across Cognitive Experiments". 
 
+## Data
+
+[OpenfMRI Repository](https://legacy.openfmri.org/)
+
 ## Requirments
 
 Preprocessing pipeline: 
@@ -7,18 +11,13 @@ Preprocessing pipeline:
 * python>=2.7
 * fsl 5.0
 * freesurfer 6.0
-* nibabel>=2.3.1
 
-Main experiment: 
+For Repreducing Main experiments: 
 
-* python>=3.6
-* nibabel 2.3.1
-* scikit-learn 0.20.2
-* numpy 1.16.1
-* scipy 1.2.0
-* cvxopt 1.2.3
-* osqp 0.6.0
-* pandas 0.23.4
+```
+pip install -r requirements.txt
+```
+
 
 Cite
 
