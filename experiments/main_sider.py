@@ -47,7 +47,7 @@ def get_param(X, D, y, kernel='linear'):
     if kernel == 'rbf':
         for gamma in gammas:
             clf = SIDeRSVM(C=best_params['C'], lambda_=best_params['lambda'], 
-                           gamma=gamma, kernel=kernel, solver='osqp')
+                           gamma=gamma, kernel=kernel, mu=0, solver='osqp')
             acc = cross_val(clf, X, D, y)
             if best_acc < np.mean(acc):
                 best_acc = np.mean(acc)
@@ -55,7 +55,8 @@ def get_param(X, D, y, kernel='linear'):
             print('gamma:', gamma, 'Score:', np.mean(acc))
 
     for lambda_ in lambdas:
-        clf = SIDeRSVM(lambda_=lambda_, C=best_params['C'], kernel=kernel, solver='osqp')
+        clf = SIDeRSVM(lambda_=lambda_, C=best_params['C'], kernel=kernel, 
+                       mu=0, solver='osqp')
         acc = cross_val(clf, X, D, y)
         if best_acc < np.mean(acc):
             best_acc = np.mean(acc)
@@ -64,7 +65,7 @@ def get_param(X, D, y, kernel='linear'):
 
     for C in Cs:
         clf = SIDeRSVM(C=C, lambda_=best_params['lambda'], 
-                      kernel=kernel, solver='osqp')
+                      kernel=kernel, mu=0, solver='osqp')
         acc = cross_val(clf, X, D, y)
         if best_acc < np.mean(acc):
             best_acc = np.mean(acc)
@@ -72,7 +73,7 @@ def get_param(X, D, y, kernel='linear'):
         print('C:', C, 'Score:', np.mean(acc))
         
     best_clf = SIDeRSVM(C=best_params['C'], kernel=kernel, gamma=best_params['gamma'],
-                        lambda_=best_params['lambda'], solver='osqp')
+                        lambda_=best_params['lambda'], mu=0, solver='osqp')
     return best_params, best_clf
        
     
