@@ -16,8 +16,8 @@ from numpy.linalg import multi_dot, inv, solve
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import pairwise_distances
 from sklearn.metrics.pairwise import pairwise_kernels
-from sklearn.utils.validation import check_is_fitted
-from sklearn.preprocessing import StandardScaler
+# from sklearn.utils.validation import check_is_fitted
+# from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import kneighbors_graph
 # import cvxpy as cvx
 # from cvxpy.error import SolverError
@@ -75,10 +75,10 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
         """
         Init function
         Parameters
-            n_components: n_componentss after tca (n_components <= d)
+            C: importance of slack variable
             kernel: 'rbf' | 'linear' | 'poly' (default is 'linear')
-            kernelparam: kernel param
-            lambda_: regulization param
+            **kwargs: kernel param
+            lambda_: regulisation param
             solver: cvxopt (default), osqp
         """
         self.kwargs = kwargs
@@ -87,7 +87,7 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
         self.mu = mu
         self.C = C
         self.solver = solver
-        self.scaler = StandardScaler()
+        # self.scaler = StandardScaler()
         self.classes = None
         self.coef_ = None
         self.X = None
@@ -116,7 +116,7 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
         else:
             X = X_train.copy()
             D = D_train.copy()
-        X = self.scaler.fit_transform(X)
+        # X = self.scaler.fit_transform(X)
         n = X.shape[0]
         Ka = np.dot(D, D.T)
         K = get_kernel(X, kernel=self.kernel, **self.kwargs)
@@ -136,7 +136,7 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
         I = np.eye(n)
         H = I - 1. / n * np.ones((n, n))
         Q_ = np.eye(n) + self.lambda_ / np.square(n - 1) * multi_dot([H, Ka, H, K]) \
-             + self.mu / np.square(n) * lapmat
+             + self.mu / np.square(n) * np.dot(lapmat, K)
         Q_inv = inv(Q_)
         Q = multi_dot([Y, J, K, Q_inv, J.T, Y])
         Q = Q.astype('float32')
@@ -197,10 +197,11 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
         Return:
             prediction scores, array-like, shape (n_samples)
         """
-        check_is_fitted(self, 'X')
-        check_is_fitted(self, 'y')
-        K = get_kernel(self.scaler.transform(X), self.X,
-                       kernel=self.kernel, **self.kwargs)
+        # check_is_fitted(self, 'X')
+        # check_is_fitted(self, 'y')
+        # K = get_kernel(self.scaler.transform(X), self.X,
+        #                kernel=self.kernel, **self.kwargs)
+        K = get_kernel(X, self.X, kernel=self.kernel, **self.kwargs)
         return np.dot(K, self.coef_)  # +self.intercept_
 
     def predict(self, X):
@@ -278,3 +279,107 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
             sys.exit()
 
         return alpha
+
+
+class SIDeRLS(BaseEstimator, TransformerMixin):
+    def __init__(self, mu1=1, mu2=1, mu3=1, kernel='linear', lambda_=1,
+                 manifold_metric='cosine', k=3, knn_mode='distance', **kwargs):
+        """
+        Init function
+        Parameters
+            kernel: 'rbf' | 'linear' | 'poly' (default is 'linear')
+            **kwargs: kernel param
+        """
+        self.kwargs = kwargs
+        self.kernel = kernel
+        self.lambda_ = lambda_
+        self.mu1 = mu1
+        self.mu2 = mu2
+        self.mu3 = mu3
+        self.classes = None
+        self.coef_ = None
+        self.X = None
+        self.y = None
+        self.manifold_metric = manifold_metric
+        self.k = k
+        self.mode = knn_mode
+
+    def fit(self, X_train, y_train, D_train, X_test=None, D_test=None):
+        n_train = X_train.shape[0]
+        if X_test is not None and D_test is not None:
+            X = np.concatenate((X_train, X_test))
+            D = np.concatenate((D_train, D_test))
+        else:
+            X = X_train.copy()
+            D = D_train.copy()
+        # X = self.scaler.fit_transform(X)
+        n = X.shape[0]
+        Ka = np.dot(D, D.T)
+        K = get_kernel(X, kernel=self.kernel, **self.kwargs)
+        K[np.isnan(K)] = 0
+
+        J = np.zeros((n_train, n))
+        J[:n_train, :n_train] = np.eye(n_train)
+
+        lapmat = get_lapmat(X, n_neighbour=self.k, mode=self.mode,
+                            metric=self.manifold_metric)
+
+        I = np.eye(n)
+        H = I - 1. / n * np.ones((n, n))
+        Q_ = np.dot(J, K) + self.mu1 * I + self.mu3 / np.square(n) * np.dot(lapmat, K) \
+             + self.mu2 / np.square(n - 1) * multi_dot([H, Ka, H, K])
+
+        Q_inv = inv(Q_)
+
+        self.coef_ = np.dot(Q_inv, y_train)
+
+        self.X = X
+        self.y = y_train
+
+        return self
+
+    def decision_function(self, X):
+        """
+        Parameters:
+            X: array-like, shape (n_samples, n_feautres)
+        Return:
+            prediction scores, array-like, shape (n_samples)
+        """
+        # check_is_fitted(self, 'X')
+        # check_is_fitted(self, 'y')
+        # K = get_kernel(self.scaler.transform(X), self.X,
+        #                kernel=self.kernel, **self.kwargs)
+        K = get_kernel(X, self.X, kernel=self.kernel, **self.kwargs)
+        return np.dot(K, self.coef_)  # +self.intercept_
+
+    def predict(self, X):
+        """
+        Parameters:
+            X: array-like, shape (n_samples, n_feautres)
+        Return:
+            predicted labels, array-like, shape (n_samples)
+        """
+        dec = self.decision_function(X)
+        if self.classes.shape[0] == 2:
+            y_pred = np.sign(dec)
+        else:
+            n_test = X.shape[0]
+            y_pred = np.zeros(n_test)
+            dec_sort = np.argsort(dec, axis=1)[:, ::-1]
+            for i in range(n_test):
+                y_pred[i] = self.classes[dec_sort[i, 0]]
+
+        return y_pred
+
+    def fit_predict(self, X_train, y, D_train, X_test, D_test):
+        """
+        solve min_x x^TPx + q^Tx, s.t. Gx<=h, Ax=b
+        Parameters:
+            X_train: Training data, array-like, shape (n_train_samples, n_feautres)
+            X_test: Testing data, array-like, shape (n_test_samples, n_feautres)
+            y: Label, array-like, shape (n_train_samples, )
+            D_train: Domain covariate matrix for training data, array-like, shape (n_train_samples, n_covariates)
+            D_test: Domain covariate matrix for testing data, array-like, shape (n_test_samples, n_covariates)
+        """
+        self.fit(X_train, y, D_train, X_test, D_test)
+        return self.predict(X_test)
