@@ -16,7 +16,7 @@ import nibabel as nib
 # openfmri_data_path = '/shared/tale2/Shared/szhou/ICML2019/data/openfmri/'
 
 # path on desktop
-openfmri_data_path = '/home/shuoz/data/openfmri/icml2019/'
+openfmri_data_path = '/media/shuoz/MyDrive/data/openfmri/icml2019/'
 
 # path on laptop
 # openfmri_data_path = 'D:/icml2019/data/openfmri/'

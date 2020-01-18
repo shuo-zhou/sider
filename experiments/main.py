@@ -26,9 +26,10 @@ def cross_val(clf, X, D, y, X_test=None, D_test=None, test_size=0.2, n_split=10)
         # y_temp = np.zeros(n)
         # y_temp[train] = y[train]
         # disvm.fit(X, y_temp, D)
-        X_test_ = np.concatenate((X[test], X_test))
-        D_test_ = np.concatenate((D[test], D_test))
-        clf.fit(X[train], y[train], D[train], X_test_, D_test_)
+        # X_test_ = np.concatenate((X[test], X_test))
+        # D_test_ = np.concatenate((D[test], D_test))
+        # clf.fit(X[train], y[train], D[train], X_test_, D_test_)
+        clf.fit(X[train], y[train], D[train], X[test], D[test])
         y_pred = clf.predict(X[test])
         acc.append(accuracy_score(y[test], y_pred))
 
@@ -86,8 +87,8 @@ data2load = config.data
 # kwargs = {'vectorize': True, 'type_': 'alff'}
 # kwargs = {'vectorize': config.vectorize, 'prob': config.prob, 'resize': True, 
 #          'scale': 0.3}
-kwargs = {'vectorize': config.vectorize, 'prob': config.prob, 'resize': False}
-k_split = 2
+kwargs = {'vectorize': True, 'prob': config.prob, 'resize': False}
+k_split = config.kfold
 print('K-fold:', k_split)
 
 if config.swap:
