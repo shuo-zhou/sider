@@ -22,7 +22,7 @@ import getopt
 
 class commandline:
     def __init__(self):
-        opts, args = getopt.getopt(sys.argv[1:], 'd:p:k:a:c:m:svh')
+        opts, args = getopt.getopt(sys.argv[1:], 'd:p:k:a:c:m:l:svh')
         opts = dict(opts)        
         # default do not submit jod to HPC
         
@@ -34,6 +34,7 @@ class commandline:
         self.swap = False
         self.kfold = 5
         self.kernel = 'linear'
+        self.loss = 'hinge'
         
         if '-h' in opts:
             self.printHelp()
@@ -58,6 +59,13 @@ class commandline:
                 self.kernel = opts['-k']
             else:
                 print('Invalid kernel')
+                sys.exit()
+
+        if '-l' in opts:
+            if opts['-l'] in ['hinge', 'ls']:
+                self.loss = opts['-l']
+            else:
+                print('Invalid loss type')
                 sys.exit()
             
         if '-s' in opts:

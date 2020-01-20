@@ -282,8 +282,8 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
 
 
 class SIDeRLS(BaseEstimator, TransformerMixin):
-    def __init__(self, mu1=1, mu2=1, mu3=1, kernel='linear', lambda_=1,
-                 manifold_metric='cosine', k=3, knn_mode='distance', **kwargs):
+    def __init__(self, mu1=1, mu2=1, mu3=1, kernel='linear', k=3,
+                 knn_mode='distance', manifold_metric='cosine', **kwargs):
         """
         Init function
         Parameters
@@ -292,7 +292,6 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
         """
         self.kwargs = kwargs
         self.kernel = kernel
-        self.lambda_ = lambda_
         self.mu1 = mu1
         self.mu2 = mu2
         self.mu3 = mu3
@@ -318,7 +317,13 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
         K = get_kernel(X, kernel=self.kernel, **self.kwargs)
         K[np.isnan(K)] = 0
 
-        J = np.zeros((n_train, n))
+        self.classes = np.unique(y_train)
+        # n_class = self.classes.shape[0]
+        y = np.zeros(n)
+        y[:n_train] = y_train[:]
+
+
+        J = np.zeros((n, n))
         J[:n_train, :n_train] = np.eye(n_train)
 
         lapmat = get_lapmat(X, n_neighbour=self.k, mode=self.mode,
@@ -331,10 +336,10 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
 
         Q_inv = inv(Q_)
 
-        self.coef_ = np.dot(Q_inv, y_train)
+        self.coef_ = np.dot(Q_inv, y)
 
         self.X = X
-        self.y = y_train
+        self.y = y
 
         return self
 

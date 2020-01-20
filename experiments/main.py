@@ -15,7 +15,7 @@ from utils.funcs import info2onehot, cat_onehot, info2idx
 from sklearn.preprocessing import StandardScaler
 from sklearn.exceptions import ConvergenceWarning
 import matplotlib.pyplot as plt
-from sider import SIDeRSVM
+from sider import SIDeRSVM, SIDeRLS
 
 
 def cross_val(clf, X, D, y, X_test=None, D_test=None, test_size=0.2, n_split=10):
@@ -37,7 +37,6 @@ def cross_val(clf, X, D, y, X_test=None, D_test=None, test_size=0.2, n_split=10)
 
 
 def get_param(X, D, y, kernel='linear'):
-    # n_comps = [20, 40, 50, 60, 80, 100]
     lambdas = np.logspace(-5, 4, 10)
     Cs = np.logspace(-5, 4, 10)
     gammas = np.logspace(-5, 4, 10)
@@ -65,8 +64,8 @@ def get_param(X, D, y, kernel='linear'):
         print('Lambda:', lambda_, 'Score:', np.mean(acc))
 
     for C in Cs:
-        clf = SIDeRSVM(C=C, lambda_=best_params['lambda'], 
-                      kernel=kernel, mu=0, solver='osqp')
+        clf = SIDeRSVM(C=C, lambda_=best_params['lambda'],
+                       kernel=kernel, mu=0, solver='osqp')
         acc = cross_val(clf, X, D, y)
         if best_acc < np.mean(acc):
             best_acc = np.mean(acc)
@@ -80,6 +79,8 @@ def get_param(X, D, y, kernel='linear'):
     
 config = commandline()
 data2load = config.data
+loss = config.loss
+krnl = config.kernel
 # clf = make_pipeline(StandardScaler(),SVC(kernel = 'linear', max_iter = 10000))
 # clf = SVC(kernel = 'linear', max_iter = 10000)
 # clf = LogisticRegression()
@@ -148,7 +149,7 @@ X_all = scaler.transform(X_all)
 Xs = scaler.transform(Xs)
 Xt = scaler.transform(Xt)
 
-print('Performing SIDeRSVM')
+print('Performing SIDeR')
 acc = []
 auc = []
 pred_all = []
@@ -173,7 +174,7 @@ for i in range(10):
         D_train = np.concatenate((Ds, Dt[train]))
         X_train = np.concatenate((Xs, Xt[train]))
         y_train = np.concatenate((ys, yt[train]))
-        best_params, clf = get_param(X_train, D_train, y_train, kernel='linear')
+        best_params, clf = get_param(X_train, D_train, y_train, kernel=krnl)
         # best_params, clf = get_param(X_train, D_train, y_train)
         print('Best param: ', best_params)
         
