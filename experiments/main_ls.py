@@ -91,7 +91,7 @@ def get_param(X, D, y, kernel='linear'):
 config = commandline()
 data2load = config.data
 loss = config.loss
-krnl = config.kernel
+knel = config.kernel
 # clf = make_pipeline(StandardScaler(),SVC(kernel = 'linear', max_iter = 10000))
 # clf = SVC(kernel = 'linear', max_iter = 10000)
 # clf = LogisticRegression()
@@ -141,7 +141,7 @@ D_all = []
 for key in D:
     D_all.append(D[key])
     print(key)
-D = np.concatenate(D_all, axis = 1)
+D = np.concatenate(D_all, axis=1)
     
 ys = ys_['Label'].values
 ns = ys.shape[0]
@@ -185,7 +185,7 @@ for i in range(10):
         D_train = np.concatenate((Ds, Dt[train]))
         X_train = np.concatenate((Xs, Xt[train]))
         y_train = np.concatenate((ys, yt[train]))
-        best_params, clf = get_param(X_train, D_train, y_train, kernel=krnl)
+        best_params, clf = get_param(X_train, D_train, y_train, kernel=knel)
         # best_params, clf = get_param(X_train, D_train, y_train)
         print('Best param: ', best_params)
         
