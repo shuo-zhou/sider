@@ -3,8 +3,11 @@
 """
 Created on Mon Feb 25 11:15:26 2019
 Ref: Zhou, S., Li, W., Cox, C.R. and Lu, H., 2020. Side Information Dependence
- as a Regularizer for Analyzing Human Brain Conditions across Cognitive Experiments.
+ as a Regulariser for Analyzing Human Brain Conditions across Cognitive Experiments.
  In Proceedings of the 34th AAAI Conference on Artificial Intelligence (AAAI 2020).
+
+ SIDeRSVM support both binary and multi-class classification
+ SIDeRLS only support binary classification, multi-class coming soon
 """
 
 import sys
@@ -70,16 +73,20 @@ def multi2binary(y, y_i):
 
 
 class SIDeRSVM(BaseEstimator, TransformerMixin):
-    def __init__(self, C=1, kernel='linear', lambda_=1, mu=1, solver='osqp',
+    def __init__(self, C=1, kernel='linear', lambda_=1, mu=0, solver='osqp',
                  manifold_metric='cosine', k=3, knn_mode='distance', **kwargs):
         """
         Init function
         Parameters
-            C: importance of slack variable
+            C: param for importance of slack variable
             kernel: 'rbf' | 'linear' | 'poly' (default is 'linear')
             **kwargs: kernel param
-            lambda_: regulisation param
-            solver: cvxopt (default), osqp
+            lambda_: param for side information dependence regularisation
+            mu: param for manifold regularisation (default 0, not apply)
+            manifold_metric: metric for manifold regularisation
+            k: number of nearest numbers for manifold regularisation
+            knn_mode: default distance
+            solver: cvxopt, osqp (default)
         """
         self.kwargs = kwargs
         self.kernel = kernel
@@ -120,11 +127,7 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
         n = X.shape[0]
         Ka = np.dot(D, D.T)
         K = get_kernel(X, kernel=self.kernel, **self.kwargs)
-
         K[np.isnan(K)] = 0
-
-        lapmat = get_lapmat(X, n_neighbour=self.k, mode=self.mode,
-                            metric=self.manifold_metric)
 
         n_train = X_train.shape[0]
         self.classes = np.unique(y)
@@ -135,8 +138,11 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
         J[:n_train, :n_train] = np.eye(n_train)
         I = np.eye(n)
         H = I - 1. / n * np.ones((n, n))
-        Q_ = np.eye(n) + self.lambda_ / np.square(n - 1) * multi_dot([H, Ka, H, K]) \
-             + self.mu / np.square(n) * np.dot(lapmat, K)
+        Q_ = np.eye(n) + self.lambda_ / np.square(n - 1) * multi_dot([H, Ka, H, K])
+        if self.mu != 0:
+            lapmat = get_lapmat(X, n_neighbour=self.k, mode=self.mode,
+                                metric=self.manifold_metric)
+            Q_ = Q_ + self.mu / np.square(n) * np.dot(lapmat, K)
         Q_inv = inv(Q_)
         Q = multi_dot([Y, J, K, Q_inv, J.T, Y])
         Q = Q.astype('float32')
@@ -223,14 +229,14 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
 
         return y_pred
 
-    def fit_predict(self, X_train, y, D_train, X_test, D_test):
+    def fit_predict(self, X_train, y, D_train, X_test=None, D_test=None):
         """
         solve min_x x^TPx + q^Tx, s.t. Gx<=h, Ax=b
         Parameters:
             X_train: Training data, array-like, shape (n_train_samples, n_feautres)
-            X_test: Testing data, array-like, shape (n_test_samples, n_feautres)
             y: Label, array-like, shape (n_train_samples, )
             D_train: Domain covariate matrix for training data, array-like, shape (n_train_samples, n_covariates)
+            X_test: Testing data, array-like, shape (n_test_samples, n_feautres)
             D_test: Domain covariate matrix for testing data, array-like, shape (n_test_samples, n_covariates)
         """
         self.fit(X_train, y, D_train, X_test, D_test)
@@ -282,13 +288,20 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
 
 
 class SIDeRLS(BaseEstimator, TransformerMixin):
-    def __init__(self, mu1=1, mu2=1, mu3=1, kernel='linear', k=3,
+    def __init__(self, mu1=1, mu2=1, mu3=0, kernel='linear', k=3,
                  knn_mode='distance', manifold_metric='cosine', **kwargs):
         """
+        only support binary classification now, multi-class coming soon
         Init function
-        Parameters
+        Parameters:
+            mu1: param for model complexity (l2 norm)
+            mu2: param for side information dependence regularisation
+            mu3: param for manifold regularisation (default 0, not apply)
             kernel: 'rbf' | 'linear' | 'poly' (default is 'linear')
             **kwargs: kernel param
+            manifold_metric: metric for manifold regularisation
+            k: number of nearest numbers for manifold regularisation
+            knn_mode: default distance
         """
         self.kwargs = kwargs
         self.kernel = kernel
@@ -322,17 +335,17 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
         y = np.zeros(n)
         y[:n_train] = y_train[:]
 
-
         J = np.zeros((n, n))
         J[:n_train, :n_train] = np.eye(n_train)
 
-        lapmat = get_lapmat(X, n_neighbour=self.k, mode=self.mode,
-                            metric=self.manifold_metric)
-
         I = np.eye(n)
         H = I - 1. / n * np.ones((n, n))
-        Q_ = np.dot(J, K) + self.mu1 * I + self.mu3 / np.square(n) * np.dot(lapmat, K) \
-             + self.mu2 / np.square(n - 1) * multi_dot([H, Ka, H, K])
+        Q_ = np.dot(J, K) + self.mu1 * I + self.mu2 / np.square(n - 1) * multi_dot([H, Ka, H, K])
+
+        if self.mu3 != 0:
+            lapmat = get_lapmat(X, n_neighbour=self.k, mode=self.mode,
+                                metric=self.manifold_metric)
+            Q_ = Q_ + self.mu3 / np.square(n) * np.dot(lapmat, K)
 
         Q_inv = inv(Q_)
 
@@ -376,14 +389,13 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
 
         return y_pred
 
-    def fit_predict(self, X_train, y, D_train, X_test, D_test):
+    def fit_predict(self, X_train, y, D_train, X_test=None, D_test=None):
         """
-        solve min_x x^TPx + q^Tx, s.t. Gx<=h, Ax=b
         Parameters:
             X_train: Training data, array-like, shape (n_train_samples, n_feautres)
-            X_test: Testing data, array-like, shape (n_test_samples, n_feautres)
             y: Label, array-like, shape (n_train_samples, )
             D_train: Domain covariate matrix for training data, array-like, shape (n_train_samples, n_covariates)
+            X_test: Testing data, array-like, shape (n_test_samples, n_feautres)
             D_test: Domain covariate matrix for testing data, array-like, shape (n_test_samples, n_covariates)
         """
         self.fit(X_train, y, D_train, X_test, D_test)
