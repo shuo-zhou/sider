@@ -434,5 +434,5 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
         Return:
             predicted labels, array-like, shape (n_test_samples,)
         """
-        self.fit(X_train, y, D_train, X_test, D_test)
+        self.fit(X_train, y_train, D_train, X_test, D_test)
         return self.predict(X_test)
