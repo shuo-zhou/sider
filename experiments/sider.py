@@ -317,6 +317,14 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
         self.mode = knn_mode
 
     def fit(self, X_train, y_train, D_train, X_test=None, D_test=None):
+        """
+        Parameters:
+            X_train: Training data, array-like, shape (n_train_samples, n_feautres)
+            X_test: Testing data, array-like, shape (n_test_samples, n_feautres)
+            y_train: Label, array-like, shape (n_train_samples, )
+            D_train: Domain covariate matrix for training data, array-like, shape (n_train_samples, n_covariates)
+            D_test: Domain covariate matrix for testing data, array-like, shape (n_test_samples, n_covariates)
+        """
         n_train = X_train.shape[0]
         if X_test is not None and D_test is not None:
             X = np.concatenate((X_train, X_test))
@@ -398,5 +406,5 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
             X_test: Testing data, array-like, shape (n_test_samples, n_feautres)
             D_test: Domain covariate matrix for testing data, array-like, shape (n_test_samples, n_covariates)
         """
-        self.fit(X_train, y, D_train, X_test, D_test)
+        self.fit(X_train, y_train, D_train, X_test, D_test)
         return self.predict(X_test)
