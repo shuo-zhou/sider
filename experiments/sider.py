@@ -44,8 +44,17 @@ def get_kernel(X, Y=None, kernel='linear', **kwargs):
                             filter_params=True, **kwargs)
 
 
-def get_lapmat(X, n_neighbour=5, metric='cosine', mode='distance',
+def get_lapmat(X, n_neighbour=3, metric='cosine', mode='distance',
                normalise=True):
+    """
+    Construct Laplacian matrix
+    :param X:
+    :param n_neighbour:
+    :param metric:
+    :param mode:
+    :param normalise:
+    :return:
+    """
     n = X.shape[0]
     knn_graph = kneighbors_graph(X, n_neighbour, metric=metric,
                                  mode=mode).toarray()
@@ -67,6 +76,12 @@ def get_lapmat(X, n_neighbour=5, metric='cosine', mode='distance',
 
 
 def multi2binary(y, y_i):
+    """
+    convert multi-class labels to binary
+    :param y: original labels, array-like, shape (n_samples,)
+    :param y_i: positive class label, int
+    :return: binary class labels, array-like, shape (n_samples,)
+    """
     new_y = np.ones(y.shape)
     new_y[np.where(y != y_i)] = -1
     return new_y
@@ -86,7 +101,7 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
             manifold_metric: metric for manifold regularisation
             k: number of nearest numbers for manifold regularisation
             knn_mode: default distance
-            solver: cvxopt, osqp (default)
+            solver: quadratic programming solver, cvxopt, osqp (default)
         """
         self.kwargs = kwargs
         self.kernel = kernel
@@ -149,7 +164,7 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
         q = -1 * np.ones((n_train, 1))
 
         if n_class == 2:
-            alpha = self.sol_qp(X_train, y, Q, q)
+            alpha = self.sol_qp(Q, y, q)
             self.coef_ = multi_dot([Q_inv, J.T, Y, alpha])
             self.support_ = np.where((alpha > 0) & (alpha < self.C))
             self.support_vectors_ = X_train[self.support_]
@@ -163,7 +178,7 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
             self.n_support_ = []
             for i in range(n_class):
                 y_temp = multi2binary(y, classes[i])
-                alpha = self.sol_qp(X_train, y_temp, Q, q)
+                alpha = self.sol_qp(Q, y_temp, q)
                 coef_list.append(multi_dot([Q_inv, J.T, Y, alpha]))
                 self.support_.append(np.where((alpha > 0) & (alpha < self.C)))
                 self.support_vectors_.append(X_train[self.support_][-1])
@@ -238,13 +253,22 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
             D_train: Domain covariate matrix for training data, array-like, shape (n_train_samples, n_covariates)
             X_test: Testing data, array-like, shape (n_test_samples, n_feautres)
             D_test: Domain covariate matrix for testing data, array-like, shape (n_test_samples, n_covariates)
+        Return:
+            predicted labels, array-like, shape (n_test_samples,)
         """
         self.fit(X_train, y, D_train, X_test, D_test)
         return self.predict(X_test)
 
-    def sol_qp(self, X_train, y, Q, q):
+    def sol_qp(self, Q, y, q):
+        """
+        solve quadratic programming problem
+        :param y: Label, array-like, shape (n_train_samples, )
+        :param Q:
+        :param q:
+        :return: coefficients alpha
+        """
         # dual
-        n_train = X_train.shape[0]
+        n_train = y.shape[0]
 
         if self.solver == 'cvxopt':
             G = np.zeros((2 * n_train, n_train))
@@ -317,6 +341,16 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
         self.mode = knn_mode
 
     def fit(self, X_train, y_train, D_train, X_test=None, D_test=None):
+        """
+        Parameters:
+            X_train: Training data, array-like, shape (n_train_samples, n_feautres)
+            y: Label, array-like, shape (n_train_samples, )
+            D_train: Domain covariate matrix for training data, array-like, shape (n_train_samples, n_covariates)
+            X_test: Testing data, array-like, shape (n_test_samples, n_feautres)
+            D_test: Domain covariate matrix for testing data, array-like, shape (n_test_samples, n_covariates)
+        Return:
+            fitted model
+        """
         n_train = X_train.shape[0]
         if X_test is not None and D_test is not None:
             X = np.concatenate((X_train, X_test))
@@ -397,6 +431,8 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
             D_train: Domain covariate matrix for training data, array-like, shape (n_train_samples, n_covariates)
             X_test: Testing data, array-like, shape (n_test_samples, n_feautres)
             D_test: Domain covariate matrix for testing data, array-like, shape (n_test_samples, n_covariates)
+        Return:
+            predicted labels, array-like, shape (n_test_samples,)
         """
         self.fit(X_train, y, D_train, X_test, D_test)
         return self.predict(X_test)
