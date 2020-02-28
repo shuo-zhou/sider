@@ -340,7 +340,7 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
         self.k = k
         self.mode = knn_mode
 
-    def fit(self, X_train, y_train, D_train, X_test=None, D_test=None):
+    def fit(self, X_train, y, D_train, X_test=None, D_test=None):
         """
         Parameters:
             X_train: Training data, array-like, shape (n_train_samples, n_feautres)
@@ -364,10 +364,10 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
         K = get_kernel(X, kernel=self.kernel, **self.kwargs)
         K[np.isnan(K)] = 0
 
-        self.classes = np.unique(y_train)
+        self.classes = np.unique(y)
         # n_class = self.classes.shape[0]
-        y = np.zeros(n)
-        y[:n_train] = y_train[:]
+        y_ = np.zeros(n)
+        y_[:n_train] = y[:]
 
         J = np.zeros((n, n))
         J[:n_train, :n_train] = np.eye(n_train)
@@ -380,10 +380,8 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
             lapmat = get_lapmat(X, n_neighbour=self.k, mode=self.mode,
                                 metric=self.manifold_metric)
             Q_ = Q_ + self.mu3 / np.square(n) * np.dot(lapmat, K)
-
         Q_inv = inv(Q_)
-
-        self.coef_ = np.dot(Q_inv, y)
+        self.coef_ = np.dot(Q_inv, y_)
 
         self.X = X
         self.y = y
@@ -434,5 +432,5 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
         Return:
             predicted labels, array-like, shape (n_test_samples,)
         """
-        self.fit(X_train, y_train, D_train, X_test, D_test)
+        self.fit(X_train, y, D_train, X_test, D_test)
         return self.predict(X_test)
