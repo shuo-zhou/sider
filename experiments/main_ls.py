@@ -37,54 +37,54 @@ def cross_val(clf, X, D, y, X_test=None, D_test=None, test_size=0.2, n_split=10)
 
 
 def get_param(X, D, y, kernel='linear'):
-    mu1s = np.logspace(-5, 4, 10)
-    mu2s = np.logspace(-5, 4, 10)
-    mu3s = np.logspace(-5, 4, 10)
-    gammas = np.logspace(-5, 4, 10)
-    best_params = {'mu1': 1, 'mu2': 1, 'mu3': 1, 'gamma': 1}
+    sigmas_ = np.logspace(-4, 3, 8)
+    lambdas_ = np.logspace(-4, 3, 8)
+    mus = np.logspace(-4, 3, 8)
+    gammas = np.logspace(-4, 2, 7)
+    best_params = {'sigma_': 1, 'lambda_': 1, 'mu': 1, 'gamma': 1}
     best_acc = 0  
 
     # n = X.shape[0]
     if kernel == 'rbf':
         for gamma in gammas:
-            clf = SIDeRLS(mu1=best_params['mu1'], mu2=best_params['mu2'],
-                          mu3=best_params['mu3'], gamma=gamma, kernel=kernel)
+            clf = SIDeRLS(sigma_=best_params['sigma_'], lambda_=best_params['lambda_'],
+                          mu=best_params['mu'], gamma=gamma, kernel=kernel)
             acc = cross_val(clf, X, D, y)
             if best_acc < np.mean(acc):
                 best_acc = np.mean(acc)
                 best_params['gamma'] = gamma
             print('gamma:', gamma, 'Score:', np.mean(acc))
 
-    for mu1 in mu1s:
-        clf = SIDeRLS(mu1=mu1, mu2=best_params['mu2'], mu3=best_params['mu3'],
+    for sigma_ in sigmas_:
+        clf = SIDeRLS(sigma_=sigma_, lambda_=best_params['lambda_'], mu=best_params['mu'],
                       gamma=best_params['gamma'], kernel=kernel)
         acc = cross_val(clf, X, D, y)
         if best_acc < np.mean(acc):
             best_acc = np.mean(acc)
-            best_params['mu1'] = mu1
-        print('Mu1:', mu1, 'Score:', np.mean(acc))
+            best_params['sigma_'] = sigma_
+        print('Sigma:', sigma_, 'Score:', np.mean(acc))
 
-    for mu2 in mu2s:
-        clf = SIDeRLS(mu2=mu2, mu1=best_params['mu1'], mu3=best_params['mu3'],
+    for lambda_ in lambdas_:
+        clf = SIDeRLS(lambda_=lambda_, sigma_=best_params['sigma_'], mu=best_params['mu'],
                       gamma=best_params['gamma'], kernel=kernel)
         acc = cross_val(clf, X, D, y)
         if best_acc < np.mean(acc):
             best_acc = np.mean(acc)
-            best_params['mu2'] = mu2
-        print('Mu2:', mu2, 'Score:', np.mean(acc))
+            best_params['lambda_'] = lambda_
+        print('Lambda:', lambda_, 'Score:', np.mean(acc))
 
-    for mu3 in mu3s:
-        clf = SIDeRLS(mu3=mu3, mu1=best_params['mu1'], mu2=best_params['mu2'],
+    for mu in mus:
+        clf = SIDeRLS(mu=mu, sigma_=best_params['sigma_'], lambda_=best_params['lambda_'],
                       gamma=best_params['gamma'], kernel=kernel)
         acc = cross_val(clf, X, D, y)
         if best_acc < np.mean(acc):
             best_acc = np.mean(acc)
-            best_params['mu3'] = mu3
-        print('Mu3:', mu3, 'Score:', np.mean(acc))
+            best_params['mu'] = mu
+        print('Mu:', mu, 'Score:', np.mean(acc))
         
-    best_clf = SIDeRLS(mu1=best_params['mu1'], mu2=best_params['mu2'],
-                       mu3=best_params['mu3'], gamma=best_params['gamma'],
-                       kernel=kernel)
+    best_clf = SIDeRLS(sigma_=best_params['sigma_'], lambda_=best_params['lambda_'], 
+                       mu=best_params['mu'], gamma=best_params['gamma'], kernel=kernel)
+
     return best_params, best_clf
        
     
