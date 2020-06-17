@@ -17,6 +17,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.metrics import pairwise_distances
 from sklearn.metrics.pairwise import pairwise_kernels
 from sklearn.neighbors import kneighbors_graph
+from sklearn.preprocessing import LabelBinarizer
 # import cvxpy as cvx
 # from cvxpy.error import SolverError
 from cvxopt import matrix, solvers
@@ -70,19 +71,6 @@ def get_lapmat(X, n_neighbour=3, metric='cosine', mode='distance',
     return lapmat
 
 
-def multi2binary(y, y_i):
-    """
-    convert multi-class labels to binary
-    Parameters
-        y: original labels, array-like, shape (n_samples,)
-        y_i: positive class label, int
-    Return: binary class labels, array-like, shape (n_samples,)
-    """
-    new_y = np.ones(y.shape)
-    new_y[np.where(y != y_i)] = -1
-    return new_y
-
-
 class SIDeRSVM(BaseEstimator, TransformerMixin):
     def __init__(self, C=1, kernel='linear', lambda_=1, mu=0, solver='osqp',
                  manifold_metric='cosine', k=3, knn_mode='distance', **kwargs):
@@ -106,16 +94,16 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
         self.C = C
         self.solver = solver
         # self.scaler = StandardScaler()
-        self.classes = None
         self.coef_ = None
         self.X = None
         self.y = None
-        self.support = None
+        self.support_ = None
         self.support_vectors_ = None
         self.n_support_ = None
         self.manifold_metric = manifold_metric
         self.k = k
         self.mode = knn_mode
+        self._lb = LabelBinarizer(pos_label=1, neg_label=-1)
 
     def fit(self, X_train, y, D_train, X_test=None, D_test=None):
         """
@@ -140,13 +128,8 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
         K = get_kernel(X, kernel=self.kernel, **self.kwargs)
         K[np.isnan(K)] = 0
 
-        n_train = X_train.shape[0]
-        self.classes = np.unique(y)
-        n_class = self.classes.shape[0]
+        y_ = self._lb.fit_transform(y)
 
-        Y = np.diag(y)
-        J = np.zeros((n_train, n))
-        J[:n_train, :n_train] = np.eye(n_train)
         I = np.eye(n)
         H = I - 1. / n * np.ones((n, n))
         Q_ = np.eye(n) + self.lambda_ / np.square(n - 1) * multi_dot([H, Ka, H, K])
@@ -155,28 +138,22 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
                                 metric=self.manifold_metric)
             Q_ = Q_ + self.mu / np.square(n) * np.dot(lapmat, K)
         Q_inv = inv(Q_)
-        Q = multi_dot([Y, J, K, Q_inv, J.T, Y])
-        Q = Q.astype('float32')
-        q = -1 * np.ones((n_train, 1))
 
-        if n_class == 2:
-            alpha = self.sol_qp(Q, y, q)
-            self.coef_ = multi_dot([Q_inv, J.T, Y, alpha])
-            self.support_ = np.where((alpha > 0) & (alpha < self.C))
+        if self._lb.classes_.shape[0] == 2:
+            self.coef_, self.support_ = self._solve_binary(K, y_, Q_inv)
             self.support_vectors_ = X_train[self.support_]
             self.n_support_ = self.support_vectors_.shape[0]
 
         else:
-            classes = np.unique(y)
             coef_list = []
             self.support_ = []
             self.support_vectors_ = []
             self.n_support_ = []
-            for i in range(n_class):
-                y_temp = multi2binary(y, classes[i])
-                alpha = self.sol_qp(Q, y_temp, q)
-                coef_list.append(multi_dot([Q_inv, J.T, Y, alpha]).reshape(-1, 1))
-                self.support_.append(np.where((alpha > 0) & (alpha < self.C)))
+            for i in range(y_.shape[1]):
+                y_temp = y_[:, i]
+                coef_, support_ = self._solve_binary(K, y_temp, Q_inv)
+                coef_list.append(coef_)
+                self.support_.append(support_)
                 self.support_vectors_.append(X_train[self.support_][-1])
                 self.n_support_.append(self.support_vectors_[-1].shape[0])
             self.coef_ = np.concatenate(coef_list, axis=1)
@@ -229,16 +206,18 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
             predicted labels, array-like, shape (n_samples)
         """
         dec = self.decision_function(X)
-        if self.classes.shape[0] == 2:
-            y_pred = np.sign(dec)
+        n_class = self._lb.classes_.shape[0]
+        if n_class == 2:
+            y_pred_ = np.sign(dec).reshape(-1, 1)
         else:
             n_test = X.shape[0]
-            y_pred = np.zeros(n_test)
+            y_pred_ = -1 * np.ones((n_test, n_class))
             dec_sort = np.argsort(dec, axis=1)[:, ::-1]
             for i in range(n_test):
-                y_pred[i] = self.classes[dec_sort[i, 0]]
+                label_idx = dec_sort[i, 0]
+                y_pred_[i, label_idx] = 1
 
-        return y_pred
+        return self._lb.inverse_transform(y_pred_)
 
     def fit_predict(self, X_train, y, D_train, X_test=None, D_test=None):
         """
@@ -255,7 +234,21 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
         self.fit(X_train, y, D_train, X_test, D_test)
         return self.predict(X_test)
 
-    def sol_qp(self, Q, y, q):
+    def _solve_binary(self, K, y_, Q_inv):
+        n_train = y_.shape[0]
+        n = K.shape[0]
+        J = np.zeros((n_train, n))
+        J[:n_train, :n_train] = np.eye(n_train)
+        q = -1 * np.ones((n_train, 1))
+        Y = np.diag(y_.reshpe(-1))
+        Q = multi_dot([Y, J, K, Q_inv, J.T, Y])
+        Q = Q.astype('float32')
+        alpha = self._quadprog(Q, y_, q)
+        coef_ = multi_dot([Q_inv, J.T, Y, alpha])
+        support_ = np.where((alpha > 0) & (alpha < self.C))
+        return coef_, support_
+
+    def _quadprog(self, Q, y, q):
         """
         solve quadratic programming problem
         :param y: Label, array-like, shape (n_train_samples, )
@@ -335,6 +328,7 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
         self.k = k
         self.mode = knn_mode
         self.class_weight = class_weight
+        self._lb = LabelBinarizer(pos_label=1, neg_label=-1)
 
     def fit(self, X_train, y, D_train, X_test=None, D_test=None):
         """
@@ -354,15 +348,14 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
             X = X_train.copy()
             D = D_train.copy()
 
-        self.classes = np.unique(y)
-        n_class = self.classes.shape[0]
+        y_ = self._lb.fit_transform(y)
 
-        if n_class == 2:
+        if self._lb.classes_.shape[0] == 2:
             self.coef_ = self.sol_prob(X, y, D)
         else:
             coefs_ = []
-            for i in range(n_class):
-                y_temp = multi2binary(y, self.classes[i])
+            for i in range(y_.shape[1]):
+                y_temp = y_[:, i]
                 coefs_.append(self.sol_prob(X, y_temp, D).reshape(-1, 1))
             self.coef_ = np.concatenate(coefs_, axis=1)
         self.X = X
@@ -393,7 +386,7 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
         else:
             E = J.copy()
 
-        Q_ = multi_dot([E, J, K]) + self.sigma_ * I + self.lambda_ / np.square(n - 1) * multi_dot([H, Kd, H, K])
+        Q_ = multi_dot([E, J, K]) + self.sigma_ * I + self.lambda_ * multi_dot([H, Kd, H, K]) / np.square(n - 1)
         Q_inv = inv(Q_)
 
         y_ = np.zeros(n)
@@ -422,16 +415,18 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
             predicted labels, array-like, shape (n_samples)
         """
         dec = self.decision_function(X)
-        if self.classes.shape[0] == 2:
-            y_pred = np.sign(dec)
+        n_class = self._lb.classes_.shape[0]
+        if n_class == 2:
+            y_pred_ = np.sign(dec).reshape(-1, 1)
         else:
             n_test = X.shape[0]
-            y_pred = np.zeros(n_test)
+            y_pred_ = -1 * np.ones((n_test, n_test))
             dec_sort = np.argsort(dec, axis=1)[:, ::-1]
             for i in range(n_test):
-                y_pred[i] = self.classes[dec_sort[i, 0]]
+                label_idx = dec_sort[i, 0]
+                y_pred_[i, label_idx] = 1
 
-        return y_pred
+        return self._lb.inverse_transform(y_pred_)
 
     def fit_predict(self, X_train, y, D_train, X_test=None, D_test=None):
         """
