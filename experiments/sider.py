@@ -152,9 +152,9 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
             for i in range(y_.shape[1]):
                 y_temp = y_[:, i]
                 coef_, support_ = self._solve_binary(K, y_temp, Q_inv)
-                coef_list.append(coef_)
+                coef_list.append(coef_.reshape(-1, 1))
                 self.support_.append(support_)
-                self.support_vectors_.append(X_train[self.support_][-1])
+                self.support_vectors_.append(X_train[support_][-1])
                 self.n_support_.append(self.support_vectors_[-1].shape[0])
             self.coef_ = np.concatenate(coef_list, axis=1)
 
@@ -240,7 +240,7 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
         J = np.zeros((n_train, n))
         J[:n_train, :n_train] = np.eye(n_train)
         q = -1 * np.ones((n_train, 1))
-        Y = np.diag(y_.reshpe(-1))
+        Y = np.diag(y_.reshape(-1))
         Q = multi_dot([Y, J, K, Q_inv, J.T, Y])
         Q = Q.astype('float32')
         alpha = self._quadprog(Q, y_, q)
@@ -303,7 +303,7 @@ class SIDeRSVM(BaseEstimator, TransformerMixin):
 class SIDeRLS(BaseEstimator, TransformerMixin):
     def __init__(self, sigma_=1, lambda_=1, mu=0, kernel='linear', k=3,
                  knn_mode='distance', manifold_metric='cosine',
-                 class_weight='balance', **kwargs):
+                 class_weight=None, **kwargs):
         """
         Parameters:
             sigma_: param for model complexity (l2 norm)
@@ -314,6 +314,7 @@ class SIDeRLS(BaseEstimator, TransformerMixin):
             manifold_metric: metric for manifold regularisation
             k: number of nearest numbers for manifold regularisation
             knn_mode: default distance
+            class_weight: None | balance (default None)
         """
         self.kwargs = kwargs
         self.kernel = kernel
