@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from sider import SIDeRSVM, SIDeRLS
 
 
-def cross_val(clf, X, D, y, X_test=None, D_test=None, test_size=0.2, n_split=10):
+def cross_val(clf, X, y, D, test_size=0.2, n_split=10):
     sss = StratifiedShuffleSplit(n_splits=n_split, test_size=test_size,
                                  train_size=1 - test_size, random_state=144)
     acc = []
@@ -29,53 +29,53 @@ def cross_val(clf, X, D, y, X_test=None, D_test=None, test_size=0.2, n_split=10)
         # X_test_ = np.concatenate((X[test], X_test))
         # D_test_ = np.concatenate((D[test], D_test))
         # clf.fit(X[train], y[train], D[train], X_test_, D_test_)
-        clf.fit(X[train], y[train], D[train], X[test], D[test])
+        clf.fit(X, y[train], D)
         y_pred = clf.predict(X[test])
         acc.append(accuracy_score(y[test], y_pred))
 
     return acc
 
 
-def get_param(X, D, y, kernel='linear'):
-    lambdas = np.logspace(-5, 4, 10)
-    Cs = np.logspace(-5, 4, 10)
-    gammas = np.logspace(-5, 4, 10)
-    best_params = {'lambda': 1, 'C': 1, 'gamma': 1}
-    best_acc = 0  
+def search_param(X, D, y, kernel='linear', loss='hinge'):
+    param_grids = {'ls': {'linear': {'lambda_': np.logspace(-4, 3, 8),
+                                     'sigma_': np.logspace(-4, 3, 8)},
+                          'rbf': {'gamma': np.logspace(-4, 2, 7),
+                                  'sigma_': np.logspace(-4, 3, 8),
+                                  'lambda_': np.logspace(-4, 3, 8)}},
+                   'hinge': {'linear': {'C': np.logspace(-4, 3, 8),
+                                        'lambda_': np.logspace(-4, 3, 8)},
+                             'rbf': {'gamma': np.logspace(-4, 2, 7),
+                                     'C': np.logspace(-4, 3, 8),
+                                     'lambda_': np.logspace(-4, 3, 8)}}}
+    algs = {'ls': SIDeRLS, 'hinge': SIDeRSVM}
+    default_params = {'hinge': {'C': 1, 'lambda_': 1, 'gamma': 0.001,
+                                'kernel': kernel, 'solver': 'osqp'},
+                      'ls': {'lambda_': 1, 'sigma_': 1, 'gamma': 0.001,
+                             'kernel': kernel}}
+    param_grid = param_grids[loss][kernel]
+    alg = algs[loss]
+    best_params = default_params[loss].copy()
 
-    # n = X.shape[0]
-    if kernel == 'rbf':
-        for gamma in gammas:
-            clf = SIDeRSVM(C=best_params['C'], lambda_=best_params['lambda'], 
-                           gamma=gamma, kernel=kernel, mu=0, solver='osqp')
-            acc = cross_val(clf, X, D, y)
-            if best_acc < np.mean(acc):
-                best_acc = np.mean(acc)
-                best_params['gamma'] = gamma
-            print('gamma:', gamma, 'Score:', np.mean(acc))
+    # best_acc = 0
 
-    for lambda_ in lambdas:
-        clf = SIDeRSVM(lambda_=lambda_, C=best_params['C'], kernel=kernel, 
-                       mu=0, solver='osqp')
-        acc = cross_val(clf, X, D, y)
-        if best_acc < np.mean(acc):
-            best_acc = np.mean(acc)
-            best_params['lambda'] = lambda_
-        print('Lambda:', lambda_, 'Score:', np.mean(acc))
+    for param in param_grid:
+        kwd_params = {key: best_params[key] for key in best_params if key != param}
+        best_acc = 0
+        for param_val in param_grid[param]:
+            kwd_ = kwd_params.copy()
+            kwd_[param] = param_val
+            clf = alg(**kwd_)
+            acc = cross_val(clf, X, y, D)
+            acc_avg = np.mean(acc)
+            if best_acc < acc_avg:
+                best_acc = acc_avg
+                best_params[param] = param_val
+            print(kwd_, 'Score:', acc_avg)
 
-    for C in Cs:
-        clf = SIDeRSVM(C=C, lambda_=best_params['lambda'],
-                       kernel=kernel, mu=0, solver='osqp')
-        acc = cross_val(clf, X, D, y)
-        if best_acc < np.mean(acc):
-            best_acc = np.mean(acc)
-            best_params['C'] = C
-        print('C:', C, 'Score:', np.mean(acc))
-        
-    best_clf = SIDeRSVM(C=best_params['C'], kernel=kernel, gamma=best_params['gamma'],
-                        lambda_=best_params['lambda'], mu=0, solver='osqp')
+        best_clf = alg(**best_params)
+
     return best_params, best_clf
-       
+
     
 config = commandline()
 data2load = config.data
@@ -130,7 +130,7 @@ D_all = []
 for key in D:
     D_all.append(D[key])
     print(key)
-D = np.concatenate(D_all, axis = 1)
+D = np.concatenate(D_all, axis=1)
     
 ys = ys_['Label'].values
 ns = ys.shape[0]
@@ -174,11 +174,12 @@ for i in range(10):
         D_train = np.concatenate((Ds, Dt[train]))
         X_train = np.concatenate((Xs, Xt[train]))
         y_train = np.concatenate((ys, yt[train]))
-        best_params, clf = get_param(X_train, D_train, y_train, kernel=krnl)
+        best_params, clf = search_param(X_train, D_train, y_train, kernel=krnl)
         # best_params, clf = get_param(X_train, D_train, y_train)
         print('Best param: ', best_params)
-        
-        clf.fit(X_train, y_train, D_train, Xt[test], Dt[test])
+        X = np.concatenate((X_train, X[test]))
+        D_ = np.concatenate((D_train, Dt[test]))
+        clf.fit(X, y_train, D_)
         pred[test] = clf.predict(Xt[test])
         score[test] = clf.decision_function(Xt[test])
         # print('Intercept: ', clf.intercept_)
