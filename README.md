@@ -1,4 +1,4 @@
-Repository for reproducing experiments in AAAI-20 paper "Side Information Dependence as a Regularizer for Analyzing Human Brain Conditions across Cognitive Experiments". 
+Repository for reproducing experiments in AAAI-20 paper "Side Information Dependence as a Regularizer for Analyzing Human Brain Conditions across Cognitive Experiments". [[Link](https://aaai.org/ojs/index.php/AAAI/article/view/6179)]
 
 ## Data
 
